@@ -17,6 +17,7 @@ class AttendanceRecord extends Model
         'timestamp',
         'date',
         'confidence',
+        'late_minutes',
         'snapshot_path',
     ];
 
@@ -24,5 +25,6 @@ class AttendanceRecord extends Model
         'timestamp' => 'datetime',
         'date' => 'date',
         'confidence' => 'float',
+        'late_minutes' => 'integer',
     ];
 }

@@ -333,6 +333,7 @@
             <button class="tab-btn" onclick="switchTab('cameras')">Cameras</button>
             <button class="tab-btn" onclick="switchTab('history')">History & Sightings</button>
             <button class="tab-btn" onclick="switchTab('shifts')">Guard Shifts</button>
+            <button class="tab-btn" onclick="switchTab('reports')">Reports</button>
             <button class="tab-btn" onclick="switchTab('register')">Face Registration</button>
         </nav>
 
@@ -541,6 +542,10 @@
                             <label>Shift End Time</label>
                             <input type="time" id="shift-end" required>
                         </div>
+                        <div class="form-group">
+                            <label>Specific Date (Optional override)</label>
+                            <input type="date" id="shift-date">
+                        </div>
                     </div>
                     <button type="submit" class="btn-primary">Save Shift</button>
                 </form>
@@ -556,7 +561,7 @@
                             <th>Guard Name</th>
                             <th>Shift Start</th>
                             <th>Shift End</th>
-                            <th>Active Days</th>
+                            <th>Schedule Type / Days</th>
                             <th>Action</th>
                         </tr>
                     </thead>
@@ -564,6 +569,63 @@
                         <tr><td colspan="5" style="text-align: center;">Loading shifts...</td></tr>
                     </tbody>
                 </table>
+            </div>
+        </div>
+
+        <!-- REPORTS TAB -->
+        <div id="tab-reports" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">30-Day Guard Attendance Report</span>
+                </div>
+                <div class="history-controls">
+                    <div class="form-group" style="min-width: 250px;">
+                        <label>Select Guard</label>
+                        <select id="report-person-select" onchange="loadAttendanceReport()">
+                            <option value="">Loading people...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="report-dashboard" style="display: none; margin-top: 1.5rem;">
+                    <!-- Stats summary cards -->
+                    <div class="form-grid" style="margin-bottom: 1.5rem;">
+                        <div class="card" style="margin-bottom: 0; background-color: rgba(34, 197, 94, 0.05); border-left: 4px solid var(--success); padding: 1rem;">
+                            <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Present Days</div>
+                            <div id="report-present-count" style="font-size: 1.75rem; font-weight: 700; color: var(--success); margin-top: 0.25rem;">0</div>
+                        </div>
+                        <div class="card" style="margin-bottom: 0; background-color: rgba(239, 68, 68, 0.05); border-left: 4px solid var(--danger); padding: 1rem;">
+                            <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Absent Days</div>
+                            <div id="report-absent-count" style="font-size: 1.75rem; font-weight: 700; color: var(--danger); margin-top: 0.25rem;">0</div>
+                        </div>
+                        <div class="card" style="margin-bottom: 0; background-color: rgba(245, 158, 11, 0.05); border-left: 4px solid var(--warning); padding: 1rem;">
+                            <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Late Arrivals</div>
+                            <div id="report-late-count" style="font-size: 1.75rem; font-weight: 700; color: var(--warning); margin-top: 0.25rem;">0</div>
+                        </div>
+                        <div class="card" style="margin-bottom: 0; background-color: rgba(255, 255, 255, 0.03); border-left: 4px solid var(--text-muted); padding: 1rem;">
+                            <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Avg Late Arrival</div>
+                            <div id="report-avg-late" style="font-size: 1.75rem; font-weight: 700; color: var(--text-main); margin-top: 0.25rem;">0 mins</div>
+                        </div>
+                    </div>
+
+                    <!-- Daily timeline table -->
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Day</th>
+                                <th>Shift Window</th>
+                                <th>Check In</th>
+                                <th>Check Out</th>
+                                <th>Late Delay</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="report-timeline-body">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
@@ -643,6 +705,7 @@
             if (tabId === 'cameras') loadConfiguredCameras();
             if (tabId === 'history') loadPeopleDropdowns();
             if (tabId === 'shifts') { loadPeopleDropdowns(); loadShifts(); }
+            if (tabId === 'reports') loadReportsPeopleDropdown();
             if (tabId === 'register') loadRegisteredPeople();
         }
 
@@ -677,7 +740,10 @@
                             <tr>
                                 <td>${r.snapshot_path ? `<img src="${BASE_URL}/snapshots/${r.snapshot_path}" class="thumb-img" onclick="openModal('${BASE_URL}/snapshots/${r.snapshot_path}')">` : 'N/A'}</td>
                                 <td><strong>${r.person_name}</strong></td>
-                                <td><span class="badge ${r.event_type === 'IN' ? 'badge-in' : 'badge-out'}">${r.event_type}</span></td>
+                                <td>
+                                    <span class="badge ${r.event_type === 'IN' ? 'badge-in' : 'badge-out'}">${r.event_type}</span>
+                                    ${r.event_type === 'IN' && r.late_minutes > 0 ? `<span class="badge" style="background-color: rgba(239, 68, 68, 0.15); color: var(--danger); margin-left: 0.25rem;">Late ${r.late_minutes}m</span>` : ''}
+                                </td>
                                 <td>${r.timestamp}</td>
                             </tr>
                         `).join('');
@@ -739,7 +805,7 @@
                 if (res.ok) {
                     const data = await res.json();
                     const opts = '<option value="">-- Select Person --</option>' + 
-                        data.people.map(p => `<option value="${p.name}">${p.name}</option>`).join('');
+                         data.people.map(p => `<option value="${p.name}">${p.name}</option>`).join('');
                     document.getElementById('hist-person-select').innerHTML = opts;
                     document.getElementById('shift-person-select').innerHTML = opts;
                 }
@@ -758,7 +824,10 @@
                         <tr>
                             <td>${r.snapshot_path ? `<img src="${BASE_URL}/snapshots/${r.snapshot_path}" class="thumb-img" onclick="openModal('${BASE_URL}/snapshots/${r.snapshot_path}')">` : 'N/A'}</td>
                             <td><strong>${r.person_name}</strong></td>
-                            <td><span class="badge ${r.event_type === 'IN' ? 'badge-in' : 'badge-out'}">${r.event_type}</span></td>
+                            <td>
+                                <span class="badge ${r.event_type === 'IN' ? 'badge-in' : 'badge-out'}">${r.event_type}</span>
+                                ${r.event_type === 'IN' && r.late_minutes > 0 ? `<span class="badge" style="background-color: rgba(239, 68, 68, 0.15); color: var(--danger); margin-left: 0.25rem;">Late ${r.late_minutes}m</span>` : ''}
+                            </td>
                             <td>${r.timestamp}</td>
                         </tr>
                     `).join('');
@@ -778,7 +847,10 @@
                     data.records.map(r => `
                         <tr>
                             <td>${r.snapshot_path ? `<img src="${BASE_URL}/snapshots/${r.snapshot_path}" class="thumb-img" onclick="openModal('${BASE_URL}/snapshots/${r.snapshot_path}')">` : 'N/A'}</td>
-                            <td><span class="badge ${r.event_type === 'IN' ? 'badge-in' : 'badge-out'}">${r.event_type}</span></td>
+                            <td>
+                                <span class="badge ${r.event_type === 'IN' ? 'badge-in' : 'badge-out'}">${r.event_type}</span>
+                                ${r.event_type === 'IN' && r.late_minutes > 0 ? `<span class="badge" style="background-color: rgba(239, 68, 68, 0.15); color: var(--danger); margin-left: 0.25rem;">Late ${r.late_minutes}m</span>` : ''}
+                            </td>
                             <td>${r.timestamp}</td>
                         </tr>
                     `).join('');
@@ -805,8 +877,8 @@
                             <td><strong>${s.person_name}</strong></td>
                             <td>${s.shift_start}</td>
                             <td>${s.shift_end}</td>
-                            <td>${s.days}</td>
-                            <td><button onclick="removeShift('${s.person_name}')" style="color: var(--danger); background:none; border:none; cursor:pointer;">Remove</button></td>
+                            <td>${s.date ? `<span class="badge" style="background-color: rgba(245, 158, 11, 0.15); color: var(--warning);">Temp: ${s.date}</span>` : `<span class="badge" style="background-color: rgba(34, 197, 94, 0.15); color: var(--primary);">Recurring: ${s.days}</span>`}</td>
+                            <td><button onclick="removeShift('${s.person_name}', '${s.date || ''}')" style="color: var(--danger); background:none; border:none; cursor:pointer;">Remove</button></td>
                         </tr>
                     `).join('');
             }
@@ -817,18 +889,94 @@
             const person_name = document.getElementById('shift-person-select').value;
             const shift_start = document.getElementById('shift-start').value;
             const shift_end = document.getElementById('shift-end').value;
+            const date = document.getElementById('shift-date').value;
             await fetch(`${BASE_URL}/api/shifts`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ person_name, shift_start, shift_end })
+                body: JSON.stringify({ person_name, shift_start, shift_end, date })
             });
+            document.getElementById('shift-date').value = '';
             loadShifts();
         });
 
-        async function removeShift(name) {
-            if (confirm(`Remove shift for ${name}?`)) {
-                await fetch(`${BASE_URL}/api/shifts/${encodeURIComponent(name)}`, { method: 'DELETE' });
+        async function removeShift(name, dateStr) {
+            const confirmMsg = dateStr ? `Remove temporary shift for ${name} on ${dateStr}?` : `Remove shift for ${name}?`;
+            if (confirm(confirmMsg)) {
+                const url = dateStr ? `${BASE_URL}/api/shifts/${encodeURIComponent(name)}?date=${encodeURIComponent(dateStr)}` : `${BASE_URL}/api/shifts/${encodeURIComponent(name)}`;
+                await fetch(url, { method: 'DELETE' });
                 loadShifts();
+            }
+        }
+
+        async function loadReportsPeopleDropdown() {
+            try {
+                const res = await fetch(`${BASE_URL}/api/people`);
+                if (res.ok) {
+                    const data = await res.json();
+                    const opts = '<option value="">-- Select Person --</option>' + 
+                         data.people.map(p => `<option value="${p.name}">${p.name}</option>`).join('');
+                    document.getElementById('report-person-select').innerHTML = opts;
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        async function loadAttendanceReport() {
+            const name = document.getElementById('report-person-select').value;
+            if (!name) {
+                document.getElementById('report-dashboard').style.display = 'none';
+                return;
+            }
+
+            const res = await fetch(`${BASE_URL}/api/report/${encodeURIComponent(name)}`);
+            if (res.ok) {
+                const data = await res.json();
+                document.getElementById('report-dashboard').style.display = 'block';
+
+                // Update Stats summary cards
+                document.getElementById('report-present-count').textContent = data.summary.present;
+                document.getElementById('report-absent-count').textContent = data.summary.absent;
+                document.getElementById('report-late-count').textContent = data.summary.late_days;
+                document.getElementById('report-avg-late').textContent = `${data.summary.avg_late_minutes} mins`;
+
+                // Populate timeline table
+                const body = document.getElementById('report-timeline-body');
+                body.innerHTML = data.timeline.slice().reverse().map(day => {
+                    let statusBadge = '';
+                    if (day.status === 'present') {
+                        statusBadge = '<span class="badge badge-in">Present</span>';
+                    } else if (day.status === 'absent') {
+                        statusBadge = '<span class="badge badge-out">Absent</span>';
+                    } else if (day.status === 'off_day') {
+                        statusBadge = '<span class="badge" style="background-color: rgba(148, 163, 184, 0.1); color: var(--text-muted);">Off Day</span>';
+                    } else if (day.status === 'pending') {
+                        statusBadge = '<span class="badge" style="background-color: rgba(245, 158, 11, 0.15); color: var(--warning);">Pending</span>';
+                    }
+
+                    const shiftText = day.shift ? `${day.shift.start} - ${day.shift.end}` : 'None';
+                    const checkIn = day.check_in || 'N/A';
+                    const checkOut = day.check_out || 'N/A';
+                    
+                    let delayStatusText = 'On Time';
+                    if (day.late_minutes > 0) {
+                        delayStatusText = `<span style="color: var(--danger); font-weight: 600;">Late by ${day.late_minutes} mins</span>`;
+                    } else if (day.status === 'present') {
+                        delayStatusText = '<span style="color: var(--success);">On Time</span>';
+                    } else {
+                        delayStatusText = 'N/A';
+                    }
+
+                    return `
+                        <tr>
+                            <td><strong>${day.date}</strong></td>
+                            <td>${day.day}</td>
+                            <td>${shiftText}</td>
+                            <td>${checkIn}</td>
+                            <td>${checkOut}</td>
+                            <td>${delayStatusText}</td>
+                            <td>${statusBadge}</td>
+                        </tr>
+                    `;
+                }).join('');
             }
         }
 

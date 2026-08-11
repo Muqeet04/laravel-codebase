@@ -41,6 +41,9 @@ Route::prefix('api')->group(function () {
         Route::get('/people', [DashboardApiController::class, 'getPeople']);
         Route::post('/register', [DashboardApiController::class, 'registerFace']);
         Route::delete('/people/{name}', [DashboardApiController::class, 'deletePerson']);
+
+        // 30-Day Attendance Report
+        Route::get('/report/{name}', [DashboardApiController::class, 'getReport']);
     });
 });
 

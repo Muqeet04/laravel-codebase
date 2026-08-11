@@ -21,17 +21,24 @@ class PushApiController extends Controller
         $validated = $request->validate([
             'person_name' => 'required|string',
             'event_type' => 'required|string',
-            'timestamp' => 'required',
+            'timestamp' => 'nullable',
             'confidence' => 'nullable|numeric',
+            'late_minutes' => 'nullable|integer',
             'snapshot_path' => 'nullable|string',
         ]);
+
+        $ts = isset($validated['timestamp']) && $validated['timestamp']
+            ? date('Y-m-d H:i:s', strtotime($validated['timestamp']))
+            : now()->format('Y-m-d H:i:s');
+        $dt = substr($ts, 0, 10);
 
         $record = AttendanceRecord::create([
             'person_name' => $validated['person_name'],
             'event_type' => $validated['event_type'],
-            'timestamp' => date('Y-m-d H:i:s', strtotime($validated['timestamp'])),
-            'date' => date('Y-m-d', strtotime($validated['timestamp'])),
+            'timestamp' => $ts,
+            'date' => $dt,
             'confidence' => $validated['confidence'] ?? 0.0,
+            'late_minutes' => $validated['late_minutes'] ?? 0,
             'snapshot_path' => $validated['snapshot_path'] ?? null,
         ]);
 

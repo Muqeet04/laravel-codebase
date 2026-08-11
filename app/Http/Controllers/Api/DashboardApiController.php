@@ -35,6 +35,7 @@ class DashboardApiController extends Controller
                 'event_type' => $r->event_type,
                 'timestamp' => $r->timestamp->format('Y-m-d H:i:s'),
                 'confidence' => round($r->confidence, 1),
+                'late_minutes' => $r->late_minutes ?? 0,
                 'snapshot_path' => $r->snapshot_path ?? '',
             ];
         });
@@ -80,6 +81,7 @@ class DashboardApiController extends Controller
                     'event_type' => $r->event_type,
                     'timestamp' => $r->timestamp->format('Y-m-d H:i:s'),
                     'confidence' => round($r->confidence, 1),
+                    'late_minutes' => $r->late_minutes ?? 0,
                     'snapshot_path' => $r->snapshot_path ?? '',
                 ];
             });
@@ -102,6 +104,7 @@ class DashboardApiController extends Controller
                     'event_type' => $r->event_type,
                     'timestamp' => $r->timestamp->format('Y-m-d H:i:s'),
                     'confidence' => round($r->confidence, 1),
+                    'late_minutes' => $r->late_minutes ?? 0,
                     'snapshot_path' => $r->snapshot_path ?? '',
                 ];
             });
@@ -168,7 +171,7 @@ class DashboardApiController extends Controller
     }
 
     // =========================================================================
-    // Guard Shifts CRUD
+    // Guard Shifts CRUD (recurring + temporary)
     // =========================================================================
 
     public function getShifts()
@@ -179,6 +182,7 @@ class DashboardApiController extends Controller
                 'shift_start' => $s->shift_start,
                 'shift_end' => $s->shift_end,
                 'days' => $s->days,
+                'date' => $s->date,
             ];
         });
         return response()->json(['shifts' => $shifts]);
@@ -191,10 +195,17 @@ class DashboardApiController extends Controller
             'shift_start' => 'required|string',
             'shift_end' => 'required|string',
             'days' => 'nullable|string',
+            'date' => 'nullable|string',  // "YYYY-MM-DD" for temp shifts
         ]);
 
+        $dateVal = $validated['date'] ?? null;
+        if ($dateVal === '') $dateVal = null;
+
         $shift = Shift::updateOrCreate(
-            ['person_name' => $validated['person_name']],
+            [
+                'person_name' => $validated['person_name'],
+                'date' => $dateVal,
+            ],
             [
                 'shift_start' => $validated['shift_start'],
                 'shift_end' => $validated['shift_end'],
@@ -205,13 +216,140 @@ class DashboardApiController extends Controller
         return response()->json(['success' => true, 'shift' => $shift]);
     }
 
-    public function deleteShift($name)
+    public function deleteShift(Request $request, $name)
     {
-        $deleted = Shift::where('person_name', $name)->delete();
+        $dateVal = $request->query('date');
+        if ($dateVal) {
+            $deleted = Shift::where('person_name', $name)->where('date', $dateVal)->delete();
+        } else {
+            $deleted = Shift::where('person_name', $name)->delete();
+        }
         if (!$deleted) {
             return response()->json(['error' => 'Shift not found'], 404);
         }
         return response()->json(['success' => true]);
+    }
+
+    // =========================================================================
+    // 30-Day Attendance Report
+    // =========================================================================
+
+    public function getReport(Request $request, $name)
+    {
+        $days = (int) $request->query('days', 30);
+        $endDate = now()->toDateString();
+        $startDate = now()->subDays($days - 1)->toDateString();
+
+        // Get all shifts (recurring + temp) for this person
+        $recurringShift = Shift::where('person_name', $name)->whereNull('date')->first();
+        $tempShifts = Shift::where('person_name', $name)->whereNotNull('date')
+            ->where('date', '>=', $startDate)
+            ->where('date', '<=', $endDate)
+            ->get()->keyBy('date');
+
+        // Get all attendance records for this person in the date range
+        $records = AttendanceRecord::where('person_name', $name)
+            ->where('date', '>=', $startDate)
+            ->where('date', '<=', $endDate)
+            ->orderBy('timestamp', 'asc')
+            ->get();
+
+        // Group records by date
+        $recordsByDate = $records->groupBy(function ($r) {
+            return $r->date->format('Y-m-d');
+        });
+
+        $timeline = [];
+        $presentDays = 0;
+        $absentDays = 0;
+        $offDays = 0;
+        $totalLateMinutes = 0;
+        $lateDays = 0;
+
+        $current = now()->subDays($days - 1)->startOfDay();
+        $end = now()->endOfDay();
+
+        while ($current <= $end) {
+            $dateStr = $current->format('Y-m-d');
+            $dayAbbr = strtolower(substr($current->format('D'), 0, 3));
+
+            // Determine active shift for this date
+            $activeShift = null;
+            if (isset($tempShifts[$dateStr])) {
+                $activeShift = $tempShifts[$dateStr];
+            } elseif ($recurringShift) {
+                $scheduledDays = array_map('trim', explode(',', strtolower($recurringShift->days)));
+                if (in_array($dayAbbr, $scheduledDays)) {
+                    $activeShift = $recurringShift;
+                }
+            }
+
+            $dayRecords = $recordsByDate->get($dateStr, collect());
+            $inRecord = $dayRecords->where('event_type', 'IN')->first();
+            $outRecord = $dayRecords->where('event_type', 'OUT')->last();
+
+            $status = 'off_day';
+            $lateMin = 0;
+            $checkIn = null;
+            $checkOut = null;
+
+            if ($activeShift) {
+                // This person had a shift on this day
+                if ($inRecord) {
+                    $status = 'present';
+                    $presentDays++;
+                    $lateMin = $inRecord->late_minutes ?? 0;
+                    $checkIn = $inRecord->timestamp->format('H:i:s');
+
+                    if ($lateMin > 0) {
+                        $totalLateMinutes += $lateMin;
+                        $lateDays++;
+                    }
+
+                    if ($outRecord && $outRecord->id !== $inRecord->id) {
+                        $checkOut = $outRecord->timestamp->format('H:i:s');
+                    }
+                } else {
+                    // Had shift but no check-in → absent (only for past days)
+                    if ($dateStr < date('Y-m-d')) {
+                        $status = 'absent';
+                        $absentDays++;
+                    } else {
+                        $status = 'pending'; // Today, not yet checked in
+                    }
+                }
+            } else {
+                $offDays++;
+            }
+
+            $timeline[] = [
+                'date' => $dateStr,
+                'day' => $current->format('D'),
+                'status' => $status,
+                'shift' => $activeShift ? [
+                    'start' => $activeShift->shift_start,
+                    'end' => $activeShift->shift_end,
+                ] : null,
+                'check_in' => $checkIn,
+                'check_out' => $checkOut,
+                'late_minutes' => $lateMin,
+            ];
+
+            $current->addDay();
+        }
+
+        return response()->json([
+            'person_name' => $name,
+            'period' => ['from' => $startDate, 'to' => $endDate, 'days' => $days],
+            'summary' => [
+                'present' => $presentDays,
+                'absent' => $absentDays,
+                'off_days' => $offDays,
+                'late_days' => $lateDays,
+                'avg_late_minutes' => $lateDays > 0 ? round($totalLateMinutes / $lateDays, 1) : 0,
+            ],
+            'timeline' => $timeline,
+        ]);
     }
 
     // =========================================================================
@@ -221,7 +359,6 @@ class DashboardApiController extends Controller
     public function getPeople()
     {
         // Return a distinct list of registered people and their sync statuses
-        // Matching cPanel server response fields: name, image_path, face_count, status, error_reason
         $people = Face::all()->groupBy('name')->map(function ($group, $name) {
             $first = $group->first();
             $syncedCount = $group->where('status', 'synced')->count();
@@ -294,3 +431,4 @@ class DashboardApiController extends Controller
         return response()->json(['success' => true]);
     }
 }
+

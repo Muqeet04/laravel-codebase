@@ -16,5 +16,6 @@ class Shift extends Model
         'shift_start',
         'shift_end',
         'days',
+        'date',
     ];
 }
