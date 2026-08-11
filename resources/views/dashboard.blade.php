@@ -620,7 +620,7 @@
     </div>
 
     <script>
-        const BASE_URL = "{{ url('') }}";
+        const BASE_URL = "{{ url('') }}".replace(/^https?:/, window.location.protocol);
         const todayStr = new Date().toISOString().split('T')[0];
         document.getElementById('hist-date-from').value = todayStr;
         document.getElementById('hist-date-to').value = todayStr;

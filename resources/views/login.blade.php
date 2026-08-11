@@ -144,7 +144,7 @@
     </div>
 
     <script>
-        const BASE_URL = "{{ url('') }}";
+        const BASE_URL = "{{ url('') }}".replace(/^https?:/, window.location.protocol);
 
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
