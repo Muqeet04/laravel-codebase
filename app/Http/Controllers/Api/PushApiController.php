@@ -200,4 +200,89 @@ class PushApiController extends Controller
         }
         return response()->json(['success' => true]);
     }
+
+    /**
+     * GET /api/health
+     */
+    public function health()
+    {
+        return response()->json([
+            'status' => 'running',
+            'service' => 'cPanel Web Dashboard',
+        ]);
+    }
+
+    /**
+     * GET /api/push/pending-registrations
+     */
+    public function getPendingRegistrations()
+    {
+        $rows = Face::where('status', 'pending')->get(['id', 'name', 'image_path']);
+        return response()->json(['pending' => $rows]);
+    }
+
+    /**
+     * POST /api/push/complete-registration
+     */
+    public function completeRegistration(Request $request)
+    {
+        $validated = $request->validate([
+            'id' => 'required|integer',
+            'embedding' => 'required|string',
+        ]);
+
+        $face = Face::find($validated['id']);
+        if (!$face) {
+            return response()->json(['error' => 'Registration not found'], 404);
+        }
+
+        $face->update([
+            'embedding' => base64_decode($validated['embedding']),
+            'status' => 'synced',
+            'error_reason' => null,
+        ]);
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * POST /api/push/fail-registration
+     */
+    public function failRegistration(Request $request)
+    {
+        $validated = $request->validate([
+            'id' => 'required|integer',
+            'reason' => 'required|string',
+        ]);
+
+        $face = Face::find($validated['id']);
+        if (!$face) {
+            return response()->json(['error' => 'Registration not found'], 404);
+        }
+
+        $face->update([
+            'status' => 'failed',
+            'error_reason' => $validated['reason'],
+        ]);
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * GET /api/push/active-people
+     */
+    public function getActivePeople()
+    {
+        $names = Face::where('status', 'synced')->distinct()->pluck('name');
+        return response()->json(['people' => $names]);
+    }
+
+    /**
+     * GET /api/push/cameras-config
+     */
+    public function getPushCameraConfigs()
+    {
+        $cameras = Camera::all();
+        return response()->json(['cameras' => $cameras]);
+    }
 }
