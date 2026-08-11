@@ -144,6 +144,8 @@
     </div>
 
     <script>
+        const BASE_URL = "{{ url('') }}";
+
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const errorBox = document.getElementById('error-box');
@@ -153,14 +155,14 @@
             const password = document.getElementById('password').value;
 
             try {
-                const res = await fetch('/attendance/api/login', {
+                const res = await fetch(`${BASE_URL}/api/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username, password })
                 });
 
                 if (res.ok) {
-                    window.location.href = '/attendance/';
+                    window.location.href = `${BASE_URL}/`;
                 } else {
                     const data = await res.json();
                     errorBox.textContent = data.detail || 'Invalid username or password';

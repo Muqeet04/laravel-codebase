@@ -620,6 +620,7 @@
     </div>
 
     <script>
+        const BASE_URL = "{{ url('') }}";
         const todayStr = new Date().toISOString().split('T')[0];
         document.getElementById('hist-date-from').value = todayStr;
         document.getElementById('hist-date-to').value = todayStr;
@@ -627,8 +628,8 @@
         document.getElementById('hist-person-date-to').value = todayStr;
 
         async function logout() {
-            try { await fetch('/attendance/api/logout', { method: 'POST' }); } catch (e) {}
-            window.location.href = '/attendance/login';
+            try { await fetch(`${BASE_URL}/api/logout`, { method: 'POST' }); } catch (e) {}
+            window.location.href = `${BASE_URL}/login`;
         }
 
         function switchTab(tabId) {
@@ -663,8 +664,8 @@
         async function loadLiveDashboard() {
             try {
                 const [todayRes, insideRes] = await Promise.all([
-                    fetch('/attendance/api/attendance/today?limit=20'),
-                    fetch('/attendance/api/attendance/inside')
+                    fetch(`${BASE_URL}/api/attendance/today?limit=20`),
+                    fetch(`${BASE_URL}/api/attendance/inside`)
                 ]);
 
                 if (todayRes.ok) {
@@ -674,7 +675,7 @@
                     body.innerHTML = data.records.length === 0 ? '<tr><td colspan="4" style="text-align: center;">No attendance logs today.</td></tr>' :
                         data.records.map(r => `
                             <tr>
-                                <td>${r.snapshot_path ? `<img src="/attendance/snapshots/${r.snapshot_path}" class="thumb-img" onclick="openModal('/attendance/snapshots/${r.snapshot_path}')">` : 'N/A'}</td>
+                                <td>${r.snapshot_path ? `<img src="${BASE_URL}/snapshots/${r.snapshot_path}" class="thumb-img" onclick="openModal('${BASE_URL}/snapshots/${r.snapshot_path}')">` : 'N/A'}</td>
                                 <td><strong>${r.person_name}</strong></td>
                                 <td><span class="badge ${r.event_type === 'IN' ? 'badge-in' : 'badge-out'}">${r.event_type}</span></td>
                                 <td>${r.timestamp}</td>
@@ -693,7 +694,7 @@
 
         async function loadConfiguredCameras() {
             try {
-                const res = await fetch('/attendance/api/cameras/config');
+                const res = await fetch(`${BASE_URL}/api/cameras/config`);
                 if (res.ok) {
                     const data = await res.json();
                     const body = document.getElementById('configured-cameras-body');
@@ -715,7 +716,7 @@
             e.preventDefault();
             const name = document.getElementById('cam-name').value;
             const url = document.getElementById('cam-url').value;
-            await fetch('/attendance/api/cameras/config', {
+            await fetch(`${BASE_URL}/api/cameras/config`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, url, enabled: true })
@@ -727,14 +728,14 @@
 
         async function deleteCamera(id) {
             if (confirm('Remove camera?')) {
-                await fetch(`/attendance/api/cameras/config/${id}`, { method: 'DELETE' });
+                await fetch(`${BASE_URL}/api/cameras/config/${id}`, { method: 'DELETE' });
                 loadConfiguredCameras();
             }
         }
 
         async function loadPeopleDropdowns() {
             try {
-                const res = await fetch('/attendance/api/people');
+                const res = await fetch(`${BASE_URL}/api/people`);
                 if (res.ok) {
                     const data = await res.json();
                     const opts = '<option value="">-- Select Person --</option>' + 
@@ -748,14 +749,14 @@
         async function loadCollectiveHistory() {
             const from = document.getElementById('hist-date-from').value;
             const to = document.getElementById('hist-date-to').value;
-            const res = await fetch(`/attendance/api/attendance/history?date_from=${from}&date_to=${to}`);
+            const res = await fetch(`${BASE_URL}/api/attendance/history?date_from=${from}&date_to=${to}`);
             if (res.ok) {
                 const data = await res.json();
                 const body = document.getElementById('collective-history-body');
                 body.innerHTML = data.records.length === 0 ? '<tr><td colspan="4" style="text-align: center;">No logs found.</td></tr>' :
                     data.records.map(r => `
                         <tr>
-                            <td>${r.snapshot_path ? `<img src="/attendance/snapshots/${r.snapshot_path}" class="thumb-img" onclick="openModal('/attendance/snapshots/${r.snapshot_path}')">` : 'N/A'}</td>
+                            <td>${r.snapshot_path ? `<img src="${BASE_URL}/snapshots/${r.snapshot_path}" class="thumb-img" onclick="openModal('${BASE_URL}/snapshots/${r.snapshot_path}')">` : 'N/A'}</td>
                             <td><strong>${r.person_name}</strong></td>
                             <td><span class="badge ${r.event_type === 'IN' ? 'badge-in' : 'badge-out'}">${r.event_type}</span></td>
                             <td>${r.timestamp}</td>
@@ -769,14 +770,14 @@
             if (!name) return alert('Select a person');
             const from = document.getElementById('hist-person-date-from').value;
             const to = document.getElementById('hist-person-date-to').value;
-            const res = await fetch(`/attendance/api/attendance/person/${encodeURIComponent(name)}?date_from=${from}&date_to=${to}`);
+            const res = await fetch(`${BASE_URL}/api/attendance/person/${encodeURIComponent(name)}?date_from=${from}&date_to=${to}`);
             if (res.ok) {
                 const data = await res.json();
                 const logsBody = document.getElementById('person-logs-body');
                 logsBody.innerHTML = data.records.length === 0 ? '<tr><td colspan="3" style="text-align: center;">No IN/OUT records found.</td></tr>' :
                     data.records.map(r => `
                         <tr>
-                            <td>${r.snapshot_path ? `<img src="/attendance/snapshots/${r.snapshot_path}" class="thumb-img" onclick="openModal('/attendance/snapshots/${r.snapshot_path}')">` : 'N/A'}</td>
+                            <td>${r.snapshot_path ? `<img src="${BASE_URL}/snapshots/${r.snapshot_path}" class="thumb-img" onclick="openModal('${BASE_URL}/snapshots/${r.snapshot_path}')">` : 'N/A'}</td>
                             <td><span class="badge ${r.event_type === 'IN' ? 'badge-in' : 'badge-out'}">${r.event_type}</span></td>
                             <td>${r.timestamp}</td>
                         </tr>
@@ -786,7 +787,7 @@
                 sightBody.innerHTML = data.sightings.length === 0 ? '<tr><td colspan="2" style="text-align: center;">No sightings captured.</td></tr>' :
                     data.sightings.map(s => `
                         <tr>
-                            <td>${s.snapshot_path ? `<img src="/attendance/snapshots/${s.snapshot_path}" class="thumb-img" onclick="openModal('/attendance/snapshots/${s.snapshot_path}')">` : 'N/A'}</td>
+                            <td>${s.snapshot_path ? `<img src="${BASE_URL}/snapshots/${s.snapshot_path}" class="thumb-img" onclick="openModal('${BASE_URL}/snapshots/${s.snapshot_path}')">` : 'N/A'}</td>
                             <td>${s.timestamp}</td>
                         </tr>
                     `).join('');
@@ -794,7 +795,7 @@
         }
 
         async function loadShifts() {
-            const res = await fetch('/attendance/api/shifts');
+            const res = await fetch(`${BASE_URL}/api/shifts`);
             if (res.ok) {
                 const data = await res.json();
                 const body = document.getElementById('shifts-list-body');
@@ -816,7 +817,7 @@
             const person_name = document.getElementById('shift-person-select').value;
             const shift_start = document.getElementById('shift-start').value;
             const shift_end = document.getElementById('shift-end').value;
-            await fetch('/attendance/api/shifts', {
+            await fetch(`${BASE_URL}/api/shifts`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ person_name, shift_start, shift_end })
@@ -826,7 +827,7 @@
 
         async function removeShift(name) {
             if (confirm(`Remove shift for ${name}?`)) {
-                await fetch(`/attendance/api/shifts/${encodeURIComponent(name)}`, { method: 'DELETE' });
+                await fetch(`${BASE_URL}/api/shifts/${encodeURIComponent(name)}`, { method: 'DELETE' });
                 loadShifts();
             }
         }
@@ -850,7 +851,7 @@
             formData.append('image', file);
 
             try {
-                const res = await fetch(`/attendance/api/register?name=${encodeURIComponent(name)}`, {
+                const res = await fetch(`${BASE_URL}/api/register?name=${encodeURIComponent(name)}`, {
                     method: 'POST',
                     body: formData
                 });
@@ -869,7 +870,7 @@
 
         async function loadRegisteredPeople() {
             try {
-                const res = await fetch('/attendance/api/people');
+                const res = await fetch(`${BASE_URL}/api/people`);
                 if (res.ok) {
                     const data = await res.json();
                     const body = document.getElementById('registered-people-body');
@@ -887,7 +888,7 @@
                             }
                             return `
                                 <tr>
-                                    <td>${p.image_path ? `<img src="/attendance/data/${p.image_path}" class="thumb-img" onclick="openModal('/attendance/data/${p.image_path}')">` : 'N/A'}</td>
+                                    <td>${p.image_path ? `<img src="${BASE_URL}/data/${p.image_path}" class="thumb-img" onclick="openModal('${BASE_URL}/data/${p.image_path}')">` : 'N/A'}</td>
                                     <td><strong>${p.name}</strong></td>
                                     <td>${p.face_count} image(s)</td>
                                     <td>${statusBadge}</td>
@@ -901,7 +902,7 @@
 
         async function removePerson(name) {
             if (confirm(`Delete ${name} and all registered face data?`)) {
-                await fetch(`/attendance/api/people/${encodeURIComponent(name)}`, { method: 'DELETE' });
+                await fetch(`${BASE_URL}/api/people/${encodeURIComponent(name)}`, { method: 'DELETE' });
                 loadRegisteredPeople();
             }
         }
