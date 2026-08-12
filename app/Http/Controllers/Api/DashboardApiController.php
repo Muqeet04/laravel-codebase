@@ -360,14 +360,34 @@ class DashboardApiController extends Controller
     {
         // Return a distinct list of registered people and their sync statuses
         $people = Face::all()->groupBy('name')->map(function ($group, $name) {
-            $first = $group->first();
+            $faceCount = $group->count();
             $syncedCount = $group->where('status', 'synced')->count();
+            $failedCount = $group->where('status', 'failed')->count();
+            $pendingCount = $group->where('status', 'pending')->count();
+
+            // Determine sync status expected by frontend (ready/pending/failed/incomplete)
+            if ($failedCount > 0) {
+                $status = 'failed';
+            } elseif ($pendingCount > 0) {
+                $status = 'pending';
+            } elseif ($syncedCount === $faceCount && $faceCount >= 3) {
+                $status = 'ready';
+            } else {
+                $status = 'incomplete';
+            }
+
+            $firstFailed = $group->where('status', 'failed')->first();
+            $errorReason = $firstFailed ? ($firstFailed->error_reason ?? '') : '';
+
+            $firstWithImage = $group->whereNotNull('image_path')->first();
+            $imagePath = $firstWithImage ? $firstWithImage->image_path : '';
+
             return [
                 'name' => $name,
-                'image_path' => $first->image_path ?? '',
-                'face_count' => $group->count(),
-                'status' => $first->status,
-                'error_reason' => $first->error_reason ?? '',
+                'image_path' => $imagePath,
+                'face_count' => $faceCount,
+                'status' => $status,
+                'error_reason' => $errorReason,
             ];
         })->values();
 

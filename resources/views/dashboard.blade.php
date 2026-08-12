@@ -576,7 +576,7 @@
         <div id="tab-reports" class="tab-content">
             <div class="card">
                 <div class="card-header">
-                    <span class="card-title">30-Day Guard Attendance Report</span>
+                    <span class="card-title" id="report-title-text">30-Day Guard Attendance Report</span>
                 </div>
                 <div class="history-controls">
                     <div class="form-group" style="min-width: 250px;">
@@ -585,9 +585,31 @@
                             <option value="">Loading people...</option>
                         </select>
                     </div>
+                    <div class="form-group" style="min-width: 150px;">
+                        <label>Period</label>
+                        <select id="report-days-select" onchange="loadAttendanceReport()">
+                            <option value="7">Last 7 Days</option>
+                            <option value="30" selected>Last 30 Days</option>
+                            <option value="90">Last 90 Days</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div id="report-dashboard" style="display: none; margin-top: 1.5rem;">
+                    <!-- Report Actions bar -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem;">
+                        <h3 id="report-guard-title" style="font-size: 1.1rem; font-weight: 600;">Attendance Report</h3>
+                        <div style="display: flex; gap: 0.75rem;">
+                            <button onclick="exportReportCSV()" class="btn-primary" style="background-color: #10b981; display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; padding: 0.5rem 0.85rem;">
+                                <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M14 14V4.5L9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2zM4.5 9h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1zM4 11.5a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5zm.5-4h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1z"/></svg>
+                                Export CSV
+                            </button>
+                            <button onclick="exportReportPDF()" class="btn-primary" style="background-color: var(--primary); display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; padding: 0.5rem 0.85rem;">
+                                <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path d="M5 10.5a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 0 1h-2a.5.5 0 0 1-.5-.5zm0-2a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5zm0-2a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5z"/><path d="M14 14V4.5L9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2zM4.5 1a1 1 0 0 1 .8.4l3 3a1 1 0 0 1 .2.6H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h.5z"/></svg>
+                                Export PDF
+                            </button>
+                        </div>
+                    </div>
                     <!-- Stats summary cards -->
                     <div class="form-grid" style="margin-bottom: 1.5rem;">
                         <div class="card" style="margin-bottom: 0; background-color: rgba(34, 197, 94, 0.05); border-left: 4px solid var(--success); padding: 1rem;">
@@ -683,6 +705,7 @@
 
     <script>
         const BASE_URL = "{{ url('') }}".replace(/^https?:/, window.location.protocol);
+        let currentReportData = null;
         const todayStr = new Date().toISOString().split('T')[0];
         document.getElementById('hist-date-from').value = todayStr;
         document.getElementById('hist-date-to').value = todayStr;
@@ -922,15 +945,22 @@
 
         async function loadAttendanceReport() {
             const name = document.getElementById('report-person-select').value;
+            const days = document.getElementById('report-days-select').value;
             if (!name) {
                 document.getElementById('report-dashboard').style.display = 'none';
+                currentReportData = null;
                 return;
             }
 
-            const res = await fetch(`${BASE_URL}/api/report/${encodeURIComponent(name)}`);
+            const res = await fetch(`${BASE_URL}/api/report/${encodeURIComponent(name)}?days=${days}`);
             if (res.ok) {
                 const data = await res.json();
+                currentReportData = data;
                 document.getElementById('report-dashboard').style.display = 'block';
+
+                // Update Report titles
+                document.getElementById('report-title-text').textContent = `${days}-Day Guard Attendance Report`;
+                document.getElementById('report-guard-title').textContent = `Attendance Report for ${data.person_name}`;
 
                 // Update Stats summary cards
                 document.getElementById('report-present-count').textContent = data.summary.present;
@@ -978,6 +1008,279 @@
                     `;
                 }).join('');
             }
+        }
+
+        function exportReportCSV() {
+            if (!currentReportData) return;
+
+            const headers = ['Date', 'Day', 'Shift Window', 'Check In', 'Check Out', 'Late Delay (mins)', 'Status'];
+            const rows = currentReportData.timeline.slice().reverse().map(day => {
+                const shiftText = day.shift ? `${day.shift.start} - ${day.shift.end}` : 'None';
+                const checkIn = day.check_in || 'N/A';
+                const checkOut = day.check_out || 'N/A';
+                const lateMin = day.late_minutes || 0;
+                const status = day.status.toUpperCase();
+                return [
+                    day.date,
+                    day.day,
+                    `"${shiftText}"`,
+                    checkIn,
+                    checkOut,
+                    lateMin,
+                    status
+                ];
+            });
+
+            const csvRows = [
+                [`Attendance Report for ${currentReportData.person_name}`],
+                [`Period: ${currentReportData.period.from} to ${currentReportData.period.to} (${currentReportData.period.days} Days)`],
+                [`Present Days: ${currentReportData.summary.present}`, `Absent Days: ${currentReportData.summary.absent}`, `Off Days: ${currentReportData.summary.off_days}`, `Late Days: ${currentReportData.summary.late_days}`, `Avg Late Minutes: ${currentReportData.summary.avg_late_minutes}`],
+                [],
+                headers,
+                ...rows
+            ];
+
+            const csvContent = csvRows.map(e => e.join(",")).join("\n");
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", `attendance_report_${currentReportData.person_name.replace(/\s+/g, '_')}_${currentReportData.period.from}_to_${currentReportData.period.to}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function exportReportPDF() {
+            if (!currentReportData) return;
+
+            const printWindow = window.open('', '_blank', 'width=900,height=800');
+            if (!printWindow) {
+                alert('Popup blocked! Please allow popups to view and save the PDF report.');
+                return;
+            }
+
+            const timelineRows = currentReportData.timeline.slice().reverse().map(day => {
+                const shiftText = day.shift ? `${day.shift.start} - ${day.shift.end}` : 'None';
+                const checkIn = day.check_in || 'N/A';
+                const checkOut = day.check_out || 'N/A';
+
+                let statusBadge = '';
+                if (day.status === 'present') {
+                    statusBadge = '<span class="badge badge-in">Present</span>';
+                } else if (day.status === 'absent') {
+                    statusBadge = '<span class="badge badge-out">Absent</span>';
+                } else if (day.status === 'off_day') {
+                    statusBadge = '<span class="badge badge-off">Off Day</span>';
+                } else if (day.status === 'pending') {
+                    statusBadge = '<span class="badge badge-pending">Pending</span>';
+                }
+
+                let delayStatusText = 'On Time';
+                if (day.late_minutes > 0) {
+                    delayStatusText = `<span class="text-danger">Late by ${day.late_minutes} mins</span>`;
+                } else if (day.status === 'present') {
+                    delayStatusText = '<span class="text-success">On Time</span>';
+                } else {
+                    delayStatusText = 'N/A';
+                }
+
+                return `
+                    <tr>
+                        <td><strong>${day.date}</strong></td>
+                        <td>${day.day}</td>
+                        <td>${shiftText}</td>
+                        <td>${checkIn}</td>
+                        <td>${checkOut}</td>
+                        <td>${delayStatusText}</td>
+                        <td>${statusBadge}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Attendance Report - ${currentReportData.person_name}</title>
+    <style>
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            color: #1e293b;
+            background-color: #ffffff;
+            margin: 0;
+            padding: 2rem;
+            line-height: 1.5;
+        }
+        .header {
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 1.5rem;
+            margin-bottom: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 1.75rem;
+            color: #0f172a;
+        }
+        .header p {
+            margin: 0.25rem 0 0 0;
+            color: #64748b;
+            font-size: 0.95rem;
+        }
+        .meta-info {
+            text-align: right;
+            font-size: 0.9rem;
+            color: #64748b;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .stat-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+        .stat-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #64748b;
+            margin-bottom: 0.25rem;
+        }
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        .stat-present { border-left: 4px solid #22c55e; color: #15803d; }
+        .stat-absent { border-left: 4px solid #ef4444; color: #b91c1c; }
+        .stat-late { border-left: 4px solid #f59e0b; color: #b45309; }
+        .stat-avg { border-left: 4px solid #64748b; color: #1e293b; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+        th, td {
+            padding: 0.6rem 0.8rem;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        th {
+            background-color: #f8fafc;
+            color: #475569;
+            font-weight: 600;
+        }
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            font-weight: 700;
+            font-size: 0.7rem;
+        }
+        .badge-in { background-color: #dcfce7; color: #15803d; }
+        .badge-out { background-color: #fee2e2; color: #b91c1c; }
+        .badge-off { background-color: #f1f5f9; color: #475569; }
+        .badge-pending { background-color: #fef3c7; color: #b45309; }
+        .text-success { color: #16a34a; font-weight: 600; }
+        .text-danger { color: #dc2626; font-weight: 600; }
+
+        .toolbar {
+            margin-bottom: 1.5rem;
+            display: flex;
+            justify-content: flex-end;
+        }
+        .btn {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .btn:hover { background-color: #2563eb; }
+
+        @media print {
+            .no-print { display: none; }
+            body { padding: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar no-print">
+        <button class="btn" onclick="window.print()">Print / Save as PDF</button>
+    </div>
+    <div class="header">
+        <div>
+            <h1>Guard Attendance Report</h1>
+            <p>Person: <strong>${currentReportData.person_name}</strong></p>
+        </div>
+        <div class="meta-info">
+            <div>Period: ${currentReportData.period.from} to ${currentReportData.period.to}</div>
+            <div>Duration: ${currentReportData.period.days} Days</div>
+            <div>Generated: ${new Date().toLocaleDateString()}</div>
+        </div>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card stat-present">
+            <div class="stat-title">Present Days</div>
+            <div class="stat-value">${currentReportData.summary.present}</div>
+        </div>
+        <div class="stat-card stat-absent">
+            <div class="stat-title">Absent Days</div>
+            <div class="stat-value">${currentReportData.summary.absent}</div>
+        </div>
+        <div class="stat-card stat-late">
+            <div class="stat-title">Late Arrivals</div>
+            <div class="stat-value">${currentReportData.summary.late_days}</div>
+        </div>
+        <div class="stat-card stat-avg">
+            <div class="stat-title">Avg Late Arrival</div>
+            <div class="stat-value">${currentReportData.summary.avg_late_minutes} mins</div>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Day</th>
+                <th>Shift Window</th>
+                <th>Check In</th>
+                <th>Check Out</th>
+                <th>Late Delay</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${timelineRows}
+        </tbody>
+    </table>
+
+    <script>
+        window.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                window.print();
+            }, 500);
+        });
+    <\/script>
+</body>
+</html>
+            `;
+
+            printWindow.document.write(html);
+            printWindow.document.close();
         }
 
         loadLiveDashboard();
