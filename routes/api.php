@@ -22,6 +22,7 @@ Route::middleware(['push.key'])->group(function () {
     Route::post('/push/cameras-config', [PushApiController::class, 'pushCamerasConfig']);
     Route::get('/push/cameras-config', [PushApiController::class, 'getPushCameraConfigs']);
     Route::post('/push/shifts', [PushApiController::class, 'pushShift']);
+    Route::get('/push/shifts', [PushApiController::class, 'getPushShifts']);
     Route::delete('/push/shifts/{name}', [PushApiController::class, 'pushDeleteShift']);
     
     // Face registration synchronization protocol

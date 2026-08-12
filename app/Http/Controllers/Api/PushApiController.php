@@ -197,6 +197,23 @@ class PushApiController extends Controller
     }
 
     /**
+     * GET /api/push/shifts
+     */
+    public function getPushShifts()
+    {
+        $shifts = Shift::all()->map(function ($s) {
+            return [
+                'person_name' => $s->person_name,
+                'shift_start' => $s->shift_start,
+                'shift_end' => $s->shift_end,
+                'days' => $s->days,
+                'date' => $s->date,
+            ];
+        });
+        return response()->json(['shifts' => $shifts]);
+    }
+
+    /**
      * DELETE /api/push/shifts/{name}
      */
     public function pushDeleteShift($name)
