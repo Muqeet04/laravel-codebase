@@ -547,6 +547,32 @@
                             <input type="date" id="shift-date">
                         </div>
                     </div>
+                    <div class="form-group" style="margin-top: 0.5rem; margin-bottom: 1.5rem;">
+                        <label style="display: block; margin-bottom: 0.25rem;">Active Work Days (Unchecked days are Off Days)</label>
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <label style="display: flex; align-items: center; gap: 0.35rem; cursor: pointer; font-size: 0.85rem; background: #0f172a; padding: 0.4rem 0.6rem; border-radius: 4px; border: 1px solid var(--border);">
+                                <input type="checkbox" class="shift-days-cb" value="mon" checked> Mon
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.35rem; cursor: pointer; font-size: 0.85rem; background: #0f172a; padding: 0.4rem 0.6rem; border-radius: 4px; border: 1px solid var(--border);">
+                                <input type="checkbox" class="shift-days-cb" value="tue" checked> Tue
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.35rem; cursor: pointer; font-size: 0.85rem; background: #0f172a; padding: 0.4rem 0.6rem; border-radius: 4px; border: 1px solid var(--border);">
+                                <input type="checkbox" class="shift-days-cb" value="wed" checked> Wed
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.35rem; cursor: pointer; font-size: 0.85rem; background: #0f172a; padding: 0.4rem 0.6rem; border-radius: 4px; border: 1px solid var(--border);">
+                                <input type="checkbox" class="shift-days-cb" value="thu" checked> Thu
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.35rem; cursor: pointer; font-size: 0.85rem; background: #0f172a; padding: 0.4rem 0.6rem; border-radius: 4px; border: 1px solid var(--border);">
+                                <input type="checkbox" class="shift-days-cb" value="fri" checked> Fri
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.35rem; cursor: pointer; font-size: 0.85rem; background: #0f172a; padding: 0.4rem 0.6rem; border-radius: 4px; border: 1px solid var(--border);">
+                                <input type="checkbox" class="shift-days-cb" value="sat"> Sat
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.35rem; cursor: pointer; font-size: 0.85rem; background: #0f172a; padding: 0.4rem 0.6rem; border-radius: 4px; border: 1px solid var(--border);">
+                                <input type="checkbox" class="shift-days-cb" value="sun"> Sun
+                            </label>
+                        </div>
+                    </div>
                     <button type="submit" class="btn-primary">Save Shift</button>
                 </form>
             </div>
@@ -913,12 +939,24 @@
             const shift_start = document.getElementById('shift-start').value;
             const shift_end = document.getElementById('shift-end').value;
             const date = document.getElementById('shift-date').value;
+            
+            // Get selected active work days
+            const checkedDays = Array.from(document.querySelectorAll('.shift-days-cb:checked')).map(cb => cb.value);
+            if (!date && checkedDays.length === 0) {
+                return alert('Please select at least one active work day for a recurring shift.');
+            }
+            const days = checkedDays.join(',');
+
             await fetch(`${BASE_URL}/api/shifts`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ person_name, shift_start, shift_end, date })
+                body: JSON.stringify({ person_name, shift_start, shift_end, date, days })
             });
             document.getElementById('shift-date').value = '';
+            // Reset checkboxes to default (mon-fri checked, sat-sun unchecked)
+            document.querySelectorAll('.shift-days-cb').forEach(cb => {
+                cb.checked = ['mon', 'tue', 'wed', 'thu', 'fri'].includes(cb.value);
+            });
             loadShifts();
         });
 
